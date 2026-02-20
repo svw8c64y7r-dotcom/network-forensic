@@ -273,7 +273,7 @@ function App() {
             <footer className="mt-20 text-center pb-12">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5 text-[10px] text-gray-500 font-bold tracking-widest uppercase">
                     <div className={`w-1.5 h-1.5 rounded-full ${import.meta.env.VITE_API_URL ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
-                    API ENDPOINT: {import.meta.env.VITE_API_URL || 'LOCAL DEV (8000)'}
+                    API ENDPOINT: {import.meta.env.VITE_API_URL || 'LOCAL DEV (8000)'} | BUILD: B-VAL-102
                 </div>
             </footer>
         </div>
