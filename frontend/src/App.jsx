@@ -31,7 +31,8 @@ function App() {
             setReport(response.data);
         } catch (error) {
             console.error('Analysis failed:', error);
-            alert('Analysis failed. Make sure the backend is running and you have set VITE_API_URL if in production.');
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            alert(`Analysis failed.\n\nBackend URL: ${apiUrl}\n\nMake sure your Render backend is "Live" and you have added VITE_API_URL to your Vercel Environment Variables.`);
         } finally {
             setAnalyzing(false);
         }
@@ -196,8 +197,8 @@ function App() {
 
                             <div className="space-y-8">
                                 <div className={`glass p-8 border-l-4 transition-all duration-500 shadow-xl ${report.risk.level === 'High' ? 'border-l-red-500 shadow-red-900/10' :
-                                        report.risk.level === 'Medium' ? 'border-l-yellow-500 shadow-yellow-900/10' :
-                                            'border-l-green-500 shadow-green-900/10'
+                                    report.risk.level === 'Medium' ? 'border-l-yellow-500 shadow-yellow-900/10' :
+                                        'border-l-green-500 shadow-green-900/10'
                                     }`}>
                                     <div className="flex items-center gap-4 mb-6">
                                         <AlertTriangle className={report.risk.level === 'High' ? 'text-red-400' : report.risk.level === 'Medium' ? 'text-yellow-400' : 'text-green-400'} />
@@ -268,8 +269,16 @@ function App() {
                     )}
                 </AnimatePresence>
             </main>
+
+            <footer className="mt-20 text-center pb-12">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5 text-[10px] text-gray-500 font-bold tracking-widest uppercase">
+                    <div className={`w-1.5 h-1.5 rounded-full ${import.meta.env.VITE_API_URL ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
+                    API ENDPOINT: {import.meta.env.VITE_API_URL || 'LOCAL DEV (8000)'}
+                </div>
+            </footer>
         </div>
-    );
+    </div >
+  );
 }
 
 export default App;
