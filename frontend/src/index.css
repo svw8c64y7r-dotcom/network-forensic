@@ -9,7 +9,8 @@
 }
 
 .glass {
-    @apply bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] rounded-[2.5rem] shadow-[0_8px_32px_0_rgba(0, 0, 0, 0.37)];
+    @apply bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem];
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 }
 
 ::-webkit-scrollbar {
@@ -21,5 +22,5 @@
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-white/[0.05] rounded-full hover:bg-white/[0.1] transition-colors;
+    @apply bg-white/10 rounded-full;
 }

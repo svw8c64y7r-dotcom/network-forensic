@@ -5,17 +5,7 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {
-      colors: {
-        background: '#0a0a0c',
-        card: 'rgba(255, 255, 255, 0.05)',
-        primary: '#3b82f6',
-        secondary: '#a855f7',
-      },
-      backdropBlur: {
-        xs: '2px',
-      }
-    },
+    extend: {},
   },
   plugins: [],
 }
