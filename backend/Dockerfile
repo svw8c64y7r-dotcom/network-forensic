@@ -6,9 +6,13 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y tshark && \
     rm -rf /var/lib/apt/lists/*
 
-# Create a non-privileged user and add to the 'wireshark' group
-RUN useradd -m appuser && \
-    usermod -aG wireshark appuser
+# Fix: Ensure wireshark group exists (sometimes not created non-interactively)
+# and set up permissions for dumpcap
+RUN groupadd -f wireshark && \
+    useradd -m -g wireshark appuser && \
+    chown root:wireshark /usr/bin/dumpcap && \
+    chmod 750 /usr/bin/dumpcap && \
+    setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
 
 # Set working directory
 WORKDIR /app
@@ -21,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Ensure upload directory exists and is writable
-RUN mkdir -p uploads && chown -R appuser:appuser /app
+RUN mkdir -p uploads && chown -R appuser:wireshark /app
 
 # Switch to non-privileged user
 USER appuser
