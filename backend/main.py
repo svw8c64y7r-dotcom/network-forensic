@@ -1,36 +1,33 @@
 import os
 import subprocess
-import json
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import re
+import shutil
+from typing import List, Dict
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from typing import List, Dict
-from reportlab.lib.pagesizes import letter
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-import re
-from typing import List, Dict
 
-app = FastAPI(title="PCAP Forensics API")
+app = FastAPI(title="AetherTrace API")
 
-# Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 UPLOAD_DIR = "uploads"
-# Use 'tshark' from PATH by default for Linux/Docker, fallback to Windows path
 TSHARK_PATH = os.getenv("TSHARK_PATH", "tshark" if os.name != "nt" else r"C:\Program Files\Wireshark\tshark.exe")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def parse_phs(phs_output: str) -> List[Dict]:
-    """Parses tshark -z io,phs output into a list of dictionaries for charting."""
+    """Parses tshark -z io,phs output into structured protocol data."""
     data = []
     lines = phs_output.split('\n')
     for line in lines:
@@ -38,7 +35,7 @@ def parse_phs(phs_output: str) -> List[Dict]:
         if match:
             data.append({
                 "protocol": match.group(1),
-                "frames": int(match.group(2)),
+                "packets": int(match.group(2)),
                 "bytes": int(match.group(3))
             })
     return data[:8]  # Limit to top 8 for UI
@@ -47,7 +44,6 @@ def parse_conv(conv_output: str) -> List[Dict]:
     """Parses tshark -z conv,ip output into structured host conversation data."""
     data = []
     lines = conv_output.split('\n')
-    # Skip headers and footers, look for IP <-> IP pattern
     for line in lines:
         match = re.search(r'(\d+\.\d+\.\d+\.\d+)\s+<->\s+(\d+\.\d+\.\d+\.\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)', line)
         if match:
@@ -66,38 +62,33 @@ def calculate_risk(expert_info: str, proto_stats: str) -> Dict:
     score = 0
     reasons = []
     
-    # Expert info reveals errors/warnings
     if "Error" in expert_info:
         score += 40
-        reasons.append("Critical expert errors detected in traffic.")
-    if "Warning" in expert_info:
+        reasons.append("Critical Expert Errors detected (Potential Malformed Packets/Attacks)")
+    elif "Warn" in expert_info:
         score += 20
-        reasons.append("Anomalous expert warnings identified.")
+        reasons.append("Expert Warnings found in traffic stream")
         
-    # Protocol anomalies
-    if "dns" in proto_stats.lower() and "http" not in proto_stats.lower():
+    if "Telnet" in proto_stats or "IRC" in proto_stats:
+        score += 30
+        reasons.append("Insecure/Legacy protocols detected (Telnet/IRC)")
+        
+    if "DNS" in proto_stats and len(proto_stats.split('\n')) < 5:
         score += 15
-        reasons.append("DNS-only traffic detected (possible exfiltration).")
+        reasons.append("Anomalous DNS-only traffic pattern (Potential C2/Exfiltration)")
+
+    level = "Low"
+    if score >= 70: level = "High"
+    elif score >= 30: level = "Medium"
     
-    if "irc" in proto_stats.lower() or "telnet" in proto_stats.lower():
-        score += 25
-        reasons.append("Legacy/Insecure protocols detected (IRC/Telnet).")
-        
-    return {
-        "score": min(score, 100),
-        "level": "High" if score > 60 else "Medium" if score > 30 else "Low",
-        "reasons": reasons
-    }
+    return {"score": min(score, 100), "level": level, "reasons": reasons if reasons else ["No major anomalies detected."]}
 
 @app.post("/analyze")
 async def analyze_pcap(file: UploadFile = File(...)):
-    if not file.filename.endswith(('.pcap', '.pcapng')):
-        raise HTTPException(status_code=400, detail="Invalid file type. Only PCAP/PCAPNG allowed.")
-    
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
+
     try:
         # 1. Get Protocol Stats
         proto_stats = subprocess.check_output([
@@ -129,37 +120,32 @@ async def analyze_pcap(file: UploadFile = File(...)):
             "status": "success"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/generate_report")
 async def generate_report(data: Dict):
-    filename = data.get("filename")
-    report_path = os.path.join(UPLOAD_DIR, f"{filename}_report.pdf")
+    report_filename = f"report_{data.get('filename', 'analysis')}.pdf"
+    report_path = os.path.join(UPLOAD_DIR, report_filename)
     
     doc = SimpleDocTemplate(report_path, pagesize=letter)
     styles = getSampleStyleSheet()
-    
-    # Custom Title Style
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        spaceAfter=30,
-        textColor=colors.HexColor("#3b82f6")
-    )
-    
+    styles.add(ParagraphStyle(name='Code', fontName='Courier', fontSize=8, leading=10))
     story = []
-    story.append(Paragraph(f"Forensics Report: {filename}", title_style))
+
+    story.append(Paragraph("AetherTrace Forensics Report", styles['Title']))
+    story.append(Paragraph(f"File: {data.get('filename')}", styles['Normal']))
     story.append(Spacer(1, 12))
     
-    story.append(Paragraph("Protocol Hierarchy Statistics", styles['Heading2']))
+    risk = data.get("risk", {})
+    story.append(Paragraph(f"Risk Assessment: {risk.get('level', 'N/A')} (Score: {risk.get('score', 0)})", styles['Heading2']))
+    for reason in risk.get("reasons", []):
+        story.append(Paragraph(f"• {reason}", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("Protocol Hierarchy", styles['Heading2']))
     story.append(Paragraph(data.get("protocol_hierarchy", "").replace("\n", "<br/>"), styles['Code']))
     story.append(Spacer(1, 12))
     
-    story.append(Paragraph("Expert Info Details", styles['Heading2']))
-    story.append(Paragraph(data.get("expert_info", "").replace("\n", "<br/>"), styles['Code']))
-    story.append(Spacer(1, 12))
-
     story.append(Paragraph("Host Communication Analysis (Top Talkers)", styles['Heading2']))
     hosts = data.get("top_talkers", [])
     if hosts:
@@ -179,17 +165,14 @@ async def generate_report(data: Dict):
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
         ]))
         story.append(t)
-    else:
-        story.append(Paragraph("No host conversation data available.", styles['Normal']))
     
     doc.build(story)
-    
-    return FileResponse(report_path, filename=f"Forensics_Report_{filename}.pdf")
+    return FileResponse(report_path, filename=report_filename, media_type='application/pdf')
 
 @app.get("/health")
-def health_check():
+async def health():
     return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
