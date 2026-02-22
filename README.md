@@ -1,2 +1,2 @@
-# network-forensic
+# PacketPrism
 pcap analyzer

@@ -4,8 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, Activity, Shield, AlertTriangle, Download, BarChart3, Binary, Search, Network } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+console.log(`[PacketPrism] Connecting to backend at: ${API_URL}`);
+
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+    baseURL: API_URL,
 });
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1'];
@@ -38,19 +41,30 @@ function App() {
         }
     };
 
-    const handleDownload = async () => {
+    const handleDownload = () => {
+        if (!report || !report.report_url) {
+            alert("No report available for download or analysis is still in progress.");
+            return;
+        }
+
         try {
-            const response = await api.post('/generate_report', report, {
-                responseType: 'blob',
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
+            // Direct download using the URL provided by the backend
+            const downloadUrl = `${API_URL}${report.report_url}`;
+
+            // Create a temporary link to trigger the download
             const link = document.createElement('a');
-            link.href = url;
+            link.href = downloadUrl;
             link.setAttribute('download', `Forensic_Report_${report.filename}.pdf`);
             document.body.appendChild(link);
             link.click();
+
+            // Cleanup
+            document.body.removeChild(link);
+
+            console.log(`[PacketPrism] Downloading report from: ${downloadUrl}`);
         } catch (error) {
             console.error('Download failed:', error);
+            alert(`Failed to trigger download: ${error.message}`);
         }
     };
 
@@ -62,16 +76,16 @@ function App() {
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="inline-block p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 mb-6 shadow-[0_0_50px_-12px_rgba(59,130,246,0.3)]"
+                    className="inline-block p-4 rounded-3xl bg-blue-500/10 border border-blue-500/20 mb-6 shadow-[0_0_50px_-12px_rgba(59,130,246,0.3)] prism-bg"
                 >
-                    <Shield className="w-10 h-10 text-blue-400" />
+                    <Activity className="w-12 h-12 text-blue-400" />
                 </motion.div>
                 <motion.h1
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="text-7xl font-black bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 bg-clip-text text-transparent mb-4 tracking-tighter"
                 >
-                    AetherTrace
+                    PacketPrism
                 </motion.h1>
                 <p className="text-gray-400 text-xl font-medium opacity-60 tracking-wide">Advanced PCAP Forensics Intelligence Platform</p>
             </header>
@@ -271,9 +285,9 @@ function App() {
             </main>
 
             <footer className="mt-20 text-center pb-12">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5 text-[10px] text-gray-500 font-bold tracking-widest uppercase">
-                    <div className={`w-1.5 h-1.5 rounded-full ${import.meta.env.VITE_API_URL ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
-                    API ENDPOINT: {import.meta.env.VITE_API_URL || 'LOCAL DEV (8000)'} | BUILD: B-VAL-102
+                <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 border border-white/5 text-[10px] text-gray-500 font-bold tracking-[0.2em] uppercase backdrop-blur-xl">
+                    <div className={`w-2 h-2 rounded-full ${API_URL.includes('localhost') ? 'bg-yellow-500 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_#10b981]'}`} />
+                    API ENDPOINT: {API_URL} | CORE: PP-VAL-202
                 </div>
             </footer>
         </div>
